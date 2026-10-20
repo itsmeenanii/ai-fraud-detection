@@ -1,0 +1,7 @@
+.env
+venv/
+__pycache__/
+*.db
+fraud_detection_data.csv
+evaluation_results.csv
+.streamlit/secrets.toml

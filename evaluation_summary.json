@@ -1,0 +1,146 @@
+{
+  "best_mode": "llm",
+  "modes": {
+    "rules": {
+      "samples": 45,
+      "accuracy": 0.844,
+      "macro_f1": 0.84,
+      "per_class": {
+        "Legit": {
+          "precision": 0.789,
+          "recall": 1.0,
+          "f1": 0.882,
+          "support": 15
+        },
+        "Spam": {
+          "precision": 0.812,
+          "recall": 0.867,
+          "f1": 0.839,
+          "support": 15
+        },
+        "Fraud": {
+          "precision": 1.0,
+          "recall": 0.667,
+          "f1": 0.8,
+          "support": 15
+        }
+      },
+      "confusion_matrix": {
+        "Legit": {
+          "Legit": 15,
+          "Spam": 0,
+          "Fraud": 0,
+          "Unknown": 0
+        },
+        "Spam": {
+          "Legit": 2,
+          "Spam": 13,
+          "Fraud": 0,
+          "Unknown": 0
+        },
+        "Fraud": {
+          "Legit": 2,
+          "Spam": 3,
+          "Fraud": 10,
+          "Unknown": 0
+        }
+      },
+      "fraud_missed": 5,
+      "false_fraud_alarms": 0
+    },
+    "llm": {
+      "samples": 45,
+      "accuracy": 0.978,
+      "macro_f1": 0.978,
+      "per_class": {
+        "Legit": {
+          "precision": 1.0,
+          "recall": 0.933,
+          "f1": 0.966,
+          "support": 15
+        },
+        "Spam": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 15
+        },
+        "Fraud": {
+          "precision": 0.938,
+          "recall": 1.0,
+          "f1": 0.968,
+          "support": 15
+        }
+      },
+      "confusion_matrix": {
+        "Legit": {
+          "Legit": 14,
+          "Spam": 0,
+          "Fraud": 1,
+          "Unknown": 0
+        },
+        "Spam": {
+          "Legit": 0,
+          "Spam": 15,
+          "Fraud": 0,
+          "Unknown": 0
+        },
+        "Fraud": {
+          "Legit": 0,
+          "Spam": 0,
+          "Fraud": 15,
+          "Unknown": 0
+        }
+      },
+      "fraud_missed": 0,
+      "false_fraud_alarms": 1
+    },
+    "hybrid": {
+      "samples": 45,
+      "accuracy": 0.978,
+      "macro_f1": 0.978,
+      "per_class": {
+        "Legit": {
+          "precision": 1.0,
+          "recall": 0.933,
+          "f1": 0.966,
+          "support": 15
+        },
+        "Spam": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 15
+        },
+        "Fraud": {
+          "precision": 0.938,
+          "recall": 1.0,
+          "f1": 0.968,
+          "support": 15
+        }
+      },
+      "confusion_matrix": {
+        "Legit": {
+          "Legit": 14,
+          "Spam": 0,
+          "Fraud": 1,
+          "Unknown": 0
+        },
+        "Spam": {
+          "Legit": 0,
+          "Spam": 15,
+          "Fraud": 0,
+          "Unknown": 0
+        },
+        "Fraud": {
+          "Legit": 0,
+          "Spam": 0,
+          "Fraud": 15,
+          "Unknown": 0
+        }
+      },
+      "fraud_missed": 0,
+      "false_fraud_alarms": 1
+    }
+  }
+}
