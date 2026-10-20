@@ -1,4 +1,5 @@
 # 🚨 AI Fraud Detection System
+https://ai-fraud-detection-student.streamlit.app/
 
 A Streamlit web app that classifies messages as **Legit**, **Spam** or **Fraud**. It accepts plain text, `.eml` emails and images (read with OCR), and uses a **hybrid** approach: an LLM for accuracy, with rule-based checks as a safety net and fallback.
 
@@ -112,6 +113,8 @@ Python · Streamlit · OpenAI-compatible LLM APIs · Tesseract OCR · SQLite · 
 - URL reputation checks and email header analysis
 - Batch upload and scheduled scanning
 - Persistent cloud database
+## screenshot
+<img width="1443" height="627" alt="image" src="https://github.com/user-attachments/assets/206708f9-8be4-4413-9a60-5acf3eaa959a" />
 
 ## Author
 
