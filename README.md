@@ -113,8 +113,13 @@ Python · Streamlit · OpenAI-compatible LLM APIs · Tesseract OCR · SQLite · 
 - URL reputation checks and email header analysis
 - Batch upload and scheduled scanning
 - Persistent cloud database
-## screenshot
+## Screenshots
+<img width="1234" height="682" alt="image" src="https://github.com/user-attachments/assets/378277ba-a635-42f7-8ecf-d542bc43a121" />
+
 <img width="1443" height="627" alt="image" src="https://github.com/user-attachments/assets/206708f9-8be4-4413-9a60-5acf3eaa959a" />
+
+<img width="1237" height="683" alt="image" src="https://github.com/user-attachments/assets/a9ea06ac-6fe1-4037-ac58-f0892c0b3838" />
+
 
 ## Author
 
