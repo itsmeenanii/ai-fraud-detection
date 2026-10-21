@@ -32,7 +32,6 @@ except ImportError:  # rules-only mode still works without the openai package
         pass
 
 LABELS = ("Legit", "Spam", "Fraud")
-MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 CACHE_DB = "llm_cache.db"
 MAX_CHARS = 2000
 
@@ -134,22 +133,40 @@ def rules_classify(text):
 # LLM detector (cached)
 # ------------------------------------------------------------------
 class LLMUnavailable(Exception):
-    """Raised when the LLM can't be used (no key, quota, network...)."""
+    """Raised when no LLM provider can be used (no key, quota, network...)."""
 
 
-_client = None
+# Which provider answered the most recent call: "primary", "backup" or "cache"
+last_provider = None
+_clients = {}
 
 
-def _get_client():
-    global _client
-    if _client is None:
-        if OpenAI is None:
-            raise LLMUnavailable("openai package not installed (pip install openai).")
-        key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
-        if not key:
-            raise LLMUnavailable("No API key set (LLM_API_KEY or OPENAI_API_KEY).")
-        _client = OpenAI(api_key=key, base_url=os.getenv("LLM_BASE_URL") or None)
-    return _client
+def _providers():
+    """
+    Providers in the order they are tried.
+      primary: LLM_API_KEY / LLM_BASE_URL / LLM_MODEL        (e.g. Groq)
+      backup : BACKUP_API_KEY / BACKUP_BASE_URL / BACKUP_MODEL (e.g. Gemini)
+    The backup is used only if all three BACKUP_* values are set.
+    """
+    provs = []
+    key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if key:
+        provs.append(("primary", key, os.getenv("LLM_BASE_URL") or None,
+                      os.getenv("LLM_MODEL", "gpt-4o-mini")))
+    bkey = os.getenv("BACKUP_API_KEY")
+    burl = os.getenv("BACKUP_BASE_URL")
+    bmodel = os.getenv("BACKUP_MODEL")
+    if bkey and burl and bmodel:
+        provs.append(("backup", bkey, burl, bmodel))
+    return provs
+
+
+def _client_for(key, base_url):
+    if OpenAI is None:
+        raise LLMUnavailable("openai package not installed (pip install openai).")
+    if (key, base_url) not in _clients:
+        _clients[(key, base_url)] = OpenAI(api_key=key, base_url=base_url)
+    return _clients[(key, base_url)]
 
 
 def _cache_conn():
@@ -159,8 +176,8 @@ def _cache_conn():
     return conn
 
 
-def _key(text):
-    return hashlib.sha256(f"{MODEL}|{text}".encode("utf-8")).hexdigest()
+def _key(text, model):
+    return hashlib.sha256(f"{model}|{text}".encode("utf-8")).hexdigest()
 
 
 SYSTEM_PROMPT = (
@@ -174,51 +191,80 @@ SYSTEM_PROMPT = (
 )
 
 
-def llm_classify(text):
-    """Returns (classification, confidence, reason). Raises LLMUnavailable on API problems."""
-    text = text[:MAX_CHARS]
-    k = _key(text)
+def _ask_provider(key, base_url, model, text):
+    """One provider, with a retry that allows a longer reply. Raises LLMUnavailable on API errors."""
+    cls, conf, reason = "Unknown", 0, "Not provided"
+    for max_tok in (600, 1500):   # retry once with more room if the reply is cut off
+        try:
+            resp = _client_for(key, base_url).chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": f"<message>\n{text}\n</message>"},
+                ],
+                max_tokens=max_tok,
+                temperature=0,
+            )
+        except RateLimitError:
+            raise LLMUnavailable("quota or rate limit reached (429)")
+        except AuthenticationError:
+            raise LLMUnavailable("API key rejected")
+        except APIConnectionError:
+            raise LLMUnavailable("could not reach the API (network problem)")
+        except APIError as e:
+            raise LLMUnavailable(f"API error: {e}")
 
+        raw = resp.choices[0].message.content or ""
+        cls, conf, reason = _parse_llm(raw)
+        if cls != "Unknown":
+            break
+    return cls, conf, reason
+
+
+def llm_classify(text):
+    """
+    Returns (classification, confidence, reason).
+    Tries the primary provider, then the backup. Raises LLMUnavailable if none can answer.
+    """
+    global last_provider
+    text = text[:MAX_CHARS]
+    provs = _providers()
+    if not provs:
+        raise LLMUnavailable("No API key set (LLM_API_KEY or OPENAI_API_KEY).")
+
+    errors = []
     conn = _cache_conn()
     try:
-        row = conn.execute(
-            "SELECT classification, confidence, reason FROM llm_cache WHERE key=?", (k,)
-        ).fetchone()
-        if row:
-            return row
+        for name, key, base_url, model in provs:
+            k = _key(text, model)
+            row = conn.execute(
+                "SELECT classification, confidence, reason FROM llm_cache WHERE key=?", (k,)
+            ).fetchone()
+            if row:
+                last_provider = "cache"
+                return row
 
-        cls, conf, reason = "Unknown", 0, "Not provided"
-        for max_tok in (600, 1500):   # retry once with more room if the reply is cut off
             try:
-                resp = _get_client().chat.completions.create(
-                    model=MODEL,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": f"<message>\n{text}\n</message>"},
-                    ],
-                    max_tokens=max_tok,
-                    temperature=0,
-                )
-            except RateLimitError:
-                raise LLMUnavailable("Quota or rate limit reached (429). Check billing or switch provider.")
-            except AuthenticationError:
-                raise LLMUnavailable("API key rejected. Check the key.")
-            except APIConnectionError:
-                raise LLMUnavailable("Could not reach the API (network problem).")
-            except APIError as e:
-                raise LLMUnavailable(f"API error: {e}")
+                cls, conf, reason = _ask_provider(key, base_url, model, text)
+            except LLMUnavailable as e:
+                errors.append(f"{name}: {e}")
+                continue                      # try the next provider
 
-            raw = resp.choices[0].message.content or ""
-            cls, conf, reason = _parse_llm(raw)
-            if cls != "Unknown":
-                break
+            if cls == "Unknown":
+                errors.append(f"{name}: reply unreadable")
+                continue
 
-        if cls != "Unknown":   # never cache failed parses
             conn.execute("INSERT OR REPLACE INTO llm_cache VALUES (?,?,?,?)", (k, cls, conf, reason))
             conn.commit()
-        return cls, conf, reason
+            last_provider = name
+            return cls, conf, reason
+
+        if all(e.endswith("reply unreadable") for e in errors):
+            return "Unknown", 0, "Not provided"   # providers answered, but not in a usable format
+        raise LLMUnavailable("; ".join(errors))
     finally:
         conn.close()
+
 
 def _parse_llm(raw):
     """Parse JSON reply; fall back to the old 'Classification: X' text format."""
@@ -267,4 +313,4 @@ def hybrid_classify(text):
     # Safety net: strong rule evidence overrides an LLM "Legit"
     if l_cls == "Legit" and r_cls == "Fraud" and r_conf >= 80:
         return "Fraud", r_conf, f"{r_reason} (rules override LLM)", "llm+rules"
-    return l_cls, l_conf, l_reason, "llm"
+    return l_cls, l_conf, l_reason, ("llm (backup)" if last_provider == "backup" else "llm")
